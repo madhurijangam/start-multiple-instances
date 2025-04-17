@@ -1,0 +1,61 @@
+import boto3
+import os
+from botocore.exceptions import ClientError
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2', region_name='us-east-1')  # Replace with your AWS region
+    ses = boto3.client('ses', region_name='us-east-1')  # Replace with your AWS region
+
+    instance_ids = [
+        'i-0a9a4183ea88f514d',
+        'i-0380baeddf7e3db87'
+        # Add all your instance IDs here
+    ]
+    sender_email = 'snehamadhuri4878@gmail.com'  # Replace with your verified sender email
+    recipient_email = 'miraclemjangam@gmail.com'  # Replace with the notification recipient
+    subject = 'EC2 Instances Stopped Successfully'
+    body = 'The following EC2 instances have been successfully stopped:'
+
+    stopped_instance_ids = []
+    failed_instance_ids = {}
+
+    try:
+        if instance_ids:
+            response = ec2.stop_instances(InstanceIds=instance_ids)
+            for stopping_instance in response.get('StoppingInstances', []):
+                stopped_instance_ids.append(stopping_instance['InstanceId'])
+            print(f"Successfully initiated stop for instances: {stopped_instance_ids}")
+        else:
+            print("No instance IDs provided.")
+
+        email_body = f"{body}\n\n" + "\n".join(stopped_instance_ids)
+
+        if failed_instance_ids:
+            email_body += "\n\nErrors occurred while trying to stop the following instances:\n"
+            for instance_id, error in failed_instance_ids.items():
+                email_body += f"- {instance_id}: {error}\n"
+
+        if stopped_instance_ids or failed_instance_ids:
+            ses.send_email(
+                Source=sender_email,
+                Destination={'ToAddresses': [recipient_email]},
+                Message={
+                    'Subject': {'Data': subject},
+                    'Body': {'Text': {'Data': email_body}}
+                }
+            )
+            print(f"Email sent to {recipient_email}.")
+        else:
+            print("No instances were attempted to stop, so no email sent.")
+
+        return {
+            'statusCode': 200,
+            'body': 'EC2 instance stop initiated and email sent successfully.'
+        }
+
+    except ClientError as e:
+        print(f"Error: {e}")
+        return {
+            'statusCode': 500,
+            'body': f'Error: {e}'
+        }
