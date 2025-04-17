@@ -1,0 +1,64 @@
+import boto3
+import os
+from botocore.exceptions import ClientError
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2', region_name='us-east-1')  # YOUR_AWS_REGION
+    ses = boto3.client('ses', region_name='us-east-1')  # YOUR_AWS_REGION
+
+    instance_ids = [
+        'i-0a9a4183ea88f514d',  # YOUR_INSTANCE_ID_1
+        'i-0380baeddf7e3db87'   # YOUR_INSTANCE_ID_2
+        # Add all your instance IDs here
+    ]
+    sender_email = 'snehamadhuri4878@gmail.com'   # YOUR_VERIFIED_SENDER_EMAIL
+    recipient_email = 'miraclemjangam@gmail.com'   # YOUR_RECIPIENT_EMAIL
+    subject = 'EC2 Instances Started Successfully'
+    body = 'The following EC2 instances have been successfully started:'
+
+    started_instance_ids = []
+    failed_instance_ids = {}
+
+    try:
+        if instance_ids:
+            response = ec2.start_instances(InstanceIds=instance_ids)
+            for starting_instance in response.get('StartingInstances', []):
+                started_instance_ids.append(starting_instance['InstanceId'])
+            print(f"Successfully initiated start for instances: {started_instance_ids}")
+        else:
+            print("No instance IDs provided.")
+
+        # Check for any errors in the start attempt (though start_instances doesn't directly report per-instance failures)
+        # For more robust error handling, you might need to query instance state after the start request.
+
+        email_body = f"{body}\n\n" + "\n".join(started_instance_ids)
+
+        if failed_instance_ids:
+            email_body += "\n\nErrors occurred while trying to start the following instances:\n"
+            for instance_id, error in failed_instance_ids.items():
+                email_body += f"- {instance_id}: {error}\n"
+
+        if started_instance_ids or failed_instance_ids:
+            ses.send_email(
+                Source=sender_email,
+                Destination={'ToAddresses': [recipient_email]},
+                Message={
+                    'Subject': {'Data': subject},
+                    'Body': {'Text': {'Data': email_body}}
+                }
+            )
+            print(f"Email sent to {recipient_email}.")
+        else:
+            print("No instances were attempted to start, so no email sent.")
+
+        return {
+            'statusCode': 200,
+            'body': 'EC2 instance start initiated and email sent successfully.'
+        }
+
+    except ClientError as e:
+        print(f"Error: {e}")
+        return {
+            'statusCode': 500,
+            'body': f'Error: {e}'
+        }
