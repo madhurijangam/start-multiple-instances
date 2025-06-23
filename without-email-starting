@@ -1,0 +1,64 @@
+import boto3
+from botocore.exceptions import ClientError
+
+def lambda_handler(event, context):
+    """
+    Lambda function to start multiple EC2 instances.
+    """
+    ec2 = boto3.client('ec2', region_name='us-east-1') # Ensure this region matches your EC2 instances
+
+    # List of EC2 Instance IDs you want to start
+    instance_ids = [
+        'i-0a9a4183ea88f514d',  # Replace with your actual instance ID
+        'i-0380baeddf7e3db87'   # Replace with your actual instance ID
+        # Add all your instance IDs here
+    ]
+
+    # This list will store IDs of instances for which start was successfully initiated
+    started_instance_ids = []
+
+    try:
+        if not instance_ids:
+            print("No instance IDs provided. Exiting.")
+            return {
+                'statusCode': 200,
+                'body': 'No instance IDs provided for startup.'
+            }
+
+        # Attempt to start the instances
+        print(f"Attempting to start the following instances: {instance_ids}")
+        response = ec2.start_instances(InstanceIds=instance_ids)
+
+        # Iterate through the response to confirm which instances had their start initiated
+        for starting_instance in response.get('StartingInstances', []):
+            started_instance_ids.append(starting_instance['InstanceId'])
+
+        if started_instance_ids:
+            print(f"Successfully initiated start for instances: {started_instance_ids}")
+            return {
+                'statusCode': 200,
+                'body': f'EC2 instance start initiated successfully for: {", ".join(started_instance_ids)}.'
+            }
+        else:
+            print("No instances were successfully targeted for startup.")
+            return {
+                'statusCode': 200,
+                'body': 'No EC2 instances were targeted for startup.'
+            }
+
+    except ClientError as e:
+        # Catch AWS SDK-specific errors (e.g., permissions issues, invalid instance IDs)
+        error_message = f"AWS Client Error: {e}"
+        print(error_message)
+        return {
+            'statusCode': 500,
+            'body': error_message
+        }
+    except Exception as e:
+        # Catch any other unexpected errors
+        error_message = f"An unexpected error occurred: {e}"
+        print(error_message)
+        return {
+            'statusCode': 500,
+            'body': error_message
+        }
